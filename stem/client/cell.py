@@ -136,7 +136,7 @@ class Cell(object):
       yield cell
 
   @staticmethod
-  def pop(content, link_protocol):
+  def pop(content, link_protocol, **kwargs):
     """
     Unpacks the first cell.
 
@@ -163,7 +163,7 @@ class Cell(object):
       raise ValueError('%s cell should have a payload of %i bytes, but only had %i' % (cls.NAME, payload_len, len(content)))
 
     payload, content = split(content, payload_len)
-    return cls._unpack(payload, circ_id, link_protocol), content
+    return cls._unpack(payload, circ_id, link_protocol, **kwargs), content
 
   @classmethod
   def _pack(cls, link_protocol, payload, circ_id = 0):
@@ -301,7 +301,7 @@ class RelayCell(CircuitCell):
   VALUE = 3
   IS_FIXED_SIZE = True
 
-  def __init__(self, circ_id, command, data, digest = 0, stream_id = 0, recognized = 0):
+  def __init__(self, circ_id, command, data, digest = 0, stream_id = 0, recognized = 0, length = None):
     if 'hashlib.HASH' in str(type(digest)):
       # Unfortunately hashlib generates from a dynamic private class so
       # isinstance() isn't such a great option.
@@ -321,6 +321,10 @@ class RelayCell(CircuitCell):
     self.digest = digest
     self.stream_id = stream_id
 
+    if length is None:
+        length = len(self.data)
+    self.length = length
+
     if digest == 0:
       if not stream_id and self.command in STREAM_ID_REQUIRED:
         raise ValueError('%s relay cells require a stream id' % self.command)
@@ -333,21 +337,24 @@ class RelayCell(CircuitCell):
     payload.write(Size.SHORT.pack(self.recognized))
     payload.write(Size.SHORT.pack(self.stream_id))
     payload.write(Size.LONG.pack(self.digest))
-    payload.write(Size.SHORT.pack(len(self.data)))
+    payload.write(Size.SHORT.pack(self.length))
     payload.write(self.data)
 
     return RelayCell._pack(link_protocol, payload.getvalue(), self.circ_id)
 
   @classmethod
-  def _unpack(cls, content, circ_id, link_protocol):
+  def _unpack(cls, content, circ_id, link_protocol, is_encrypted=False):
     command, content = Size.CHAR.pop(content)
     recognized, content = Size.SHORT.pop(content)  # 'recognized' field
     stream_id, content = Size.SHORT.pop(content)
     digest, content = Size.LONG.pop(content)
-    data_len, content = Size.SHORT.pop(content)
-    data, content = split(content, data_len)
 
-    return RelayCell(circ_id, command, data, digest, stream_id, recognized)
+    data_len, content = Size.SHORT.pop(content)
+    if is_encrypted:
+        real_len = FIXED_PAYLOAD_LEN - (1 + 2 + 2 + 4 + 2) # RELAY header size
+    data, content = split(content, data_len if not is_encrypted else real_len)
+
+    return RelayCell(circ_id, command, data, digest, stream_id, recognized, data_len)
 
   def __hash__(self):
     return _hash_attr(self, 'command_int', 'stream_id', 'digest', 'data')
