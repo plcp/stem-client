@@ -567,6 +567,44 @@ class Create2Cell(CircuitCell):
   NAME = 'CREATE2'
   VALUE = 10
   IS_FIXED_SIZE = True
+  _handshake_type_names = {'ntor': 0x0002, 'tap': 0x0001}
+
+  def __init__(self, circ_id, htype='ntor', hdata='', length=None):
+    if isinstance(htype, str):
+        htype = self._handshake_type_names[htype.lower()] # in ['ntor', 'tap']
+
+    if htype != 0x0002:
+        raise NotImplementedError('No support for handshake {}.'.format(htype))
+
+    super(Create2Cell, self).__init__(circ_id)
+    self.type = htype
+    self.data = str_tools._to_bytes(hdata)
+
+    if length is None:
+        length = len(self.data)
+    self.length = int(length)
+
+  def pack(self, link_protocol):
+    payload = io.BytesIO()
+    payload.write(Size.SHORT.pack(self.type))
+    payload.write(Size.SHORT.pack(self.length))
+    payload.write(self.data)
+
+    return Create2Cell._pack(link_protocol, payload.getvalue(), self.circ_id)
+
+  @classmethod
+  def _unpack(cls, content, circ_id, link_protocol):
+    if len(content) < 4:
+      raise ValueError('CREATE2 cell expected to start with 4-bytes headers')
+
+    htype, content = Size.SHORT.pop(content)
+    length, content = Size.SHORT.pop(content)
+    hdata, content = split(content, length)
+
+    return Create2Cell(circ_id, htype, hdata, length)
+
+  def __hash__(self):
+    return _hash_attr(self, 'htype', 'data')
 
 
 class Created2Cell(Cell):
