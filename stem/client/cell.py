@@ -594,9 +594,6 @@ class Create2Cell(CircuitCell):
 
   @classmethod
   def _unpack(cls, content, circ_id, link_protocol):
-    if len(content) < 4:
-      raise ValueError('CREATE2 cell expected to start with 4-bytes headers')
-
     htype, content = Size.SHORT.pop(content)
     length, content = Size.SHORT.pop(content)
     hdata, content = split(content, length)
