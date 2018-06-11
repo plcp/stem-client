@@ -604,11 +604,35 @@ class Create2Cell(CircuitCell):
     return _hash_attr(self, 'htype', 'data')
 
 
-class Created2Cell(Cell):
+class Created2Cell(CircuitCell):
   NAME = 'CREATED2'
   VALUE = 11
   IS_FIXED_SIZE = True
 
+  def __init__(self, circ_id, hdata='', length=None):
+    super(Created2Cell, self).__init__(circ_id)
+    self.data = str_tools._to_bytes(hdata)
+
+    if length is None:
+        length = len(self.data)
+    self.length = int(length)
+
+  def pack(self, link_protocol):
+    payload = io.BytesIO()
+    payload.write(Size.SHORT.pack(self.length))
+    payload.write(self.data)
+
+    return Created2Cell._pack(link_protocol, payload.getvalue(), self.circ_id)
+
+  @classmethod
+  def _unpack(cls, content, circ_id, link_protocol):
+    length, content = Size.SHORT.pop(content)
+    hdata, content = split(content, length)
+
+    return Created2Cell(circ_id, hdata, length)
+
+  def __hash__(self):
+    return _hash_attr(self, 'data')
 
 class PaddingNegotiateCell(Cell):
   NAME = 'PADDING_NEGOTIATE'
