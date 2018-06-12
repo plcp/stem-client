@@ -557,10 +557,29 @@ class NetinfoCell(Cell):
     return _hash_attr(self, 'timestamp', 'receiver_address', 'sender_addresses')
 
 
-class RelayEarlyCell(CircuitCell):
+class RelayEarlyCell(RelayCell):
   NAME = 'RELAY_EARLY'
   VALUE = 9
   IS_FIXED_SIZE = True
+
+  def __init__(self, *kargs, **kwargs):
+    super(RelayEarlyCell, self).__init__(*kargs, **kwargs)
+
+  def pack(self, link_protocol):
+    payload = io.BytesIO()
+    payload.write(Size.CHAR.pack(self.command_int))
+    payload.write(Size.SHORT.pack(self.recognized))
+    payload.write(Size.SHORT.pack(self.stream_id))
+    payload.write(Size.LONG.pack(self.digest))
+    payload.write(Size.SHORT.pack(self.length))
+    payload.write(self.data)
+
+    return RelayEarlyCell._pack(
+        link_protocol, payload.getvalue(), self.circ_id)
+
+  @classmethod
+  def _unpack(cls, *kargs, **kwargs):
+    return RelayCell._unpack(*kargs, **kwargs)
 
 
 class Create2Cell(CircuitCell):
